@@ -13,7 +13,10 @@ interface StepResult {
 
 const ROOT = new URL('../../', import.meta.url).pathname;
 const FONTS = join(ROOT, 'design/fonts');
-const SOURCE = join(ROOT, 'design/banner/banner.vectorcraft');
+const ILLUSTRATED = process.argv[2] === 'illustrated';
+const NAME = ILLUSTRATED ? 'banner-illustrated' : 'banner';
+const BANNER_DIR = join(ROOT, 'design/banner');
+const SOURCE = join(BANNER_DIR, `${NAME}.vectorcraft`);
 const OUT_DIR = join(ROOT, 'docs/assets');
 const IMAGE = 'ubuntu:24.04';
 
@@ -80,8 +83,15 @@ class VectorDoc {
 }
 
 function bannerDoc(): VectorDoc {
-  const doc = new VectorDoc('banner');
-  doc.rect(0, 0, WIDTH, HEIGHT, CREAM);
+  const doc = new VectorDoc(NAME);
+  if (ILLUSTRATED) {
+    doc.steps.push(
+      ['file.place', { path: '/work/background.png', link: false }],
+      ['object.setBounds', { x: 0, y: -16, width: WIDTH, height: HEIGHT + 32, reference: 0 }],
+    );
+  } else {
+    doc.rect(0, 0, WIDTH, HEIGHT, CREAM);
+  }
 
   const [dx, dy] = DESTINATION;
   doc.line([[WIDTH + 20, 64], [dx + 142, 64], [dx, dy]], PINE, 16);
@@ -119,7 +129,7 @@ function bannerDoc(): VectorDoc {
 function runVectorCraft(engine: string, steps: readonly Step[]): StepResult[] {
   const args = [
     'run', '--rm', '-i', '--network', 'none', '--cpus', '1', '--memory', '1g', '--user', '65534:65534', '-e', 'HOME=/tmp', '-w', '/tmp',
-    '-v', `${engine}:/opt/vc:ro`, '-v', `${FONTS}:/usr/share/fonts/studio:ro`,
+    '-v', `${engine}:/opt/vc:ro`, '-v', `${FONTS}:/usr/share/fonts/studio:ro`, '-v', `${BANNER_DIR}:/work:ro`,
     IMAGE, '/opt/vc/bin/vectorcraft-cli', 'run',
     ...steps.flatMap(([command, params]) => ['--cmd', command, '--params', JSON.stringify(params)]),
   ];
@@ -145,7 +155,7 @@ const doc = bannerDoc();
 const svg = { minify: true, decimals: 1, objectIds: 'minimal', metadata: false };
 const outputs = [
   { file: SOURCE, params: { format: 'vectorcraft' } },
-  { file: join(OUT_DIR, 'banner.png'), params: { format: 'png', scale: 2 } },
+  { file: join(OUT_DIR, `${NAME}.png`), params: { format: 'png', scale: 2 } },
 ];
 const steps: Step[] = [
   ...doc.steps,
@@ -169,7 +179,7 @@ for (const font of (fontReport?.result ?? []) as { family: string; status: strin
 }
 
 mkdirSync(OUT_DIR, { recursive: true });
-const targets = [...outputs.map(({ file }) => file), join(OUT_DIR, 'banner.svg')];
+const targets = [...outputs.map(({ file }) => file), join(OUT_DIR, `${NAME}.svg`)];
 const exported = results.filter((step) => step.command === 'file.export');
 targets.forEach((file, index) => {
   const data = (exported[index]?.result as { dataBase64?: string } | undefined)?.dataBase64;
